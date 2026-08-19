@@ -1,19 +1,19 @@
 #!/bin/bash
 
-echo "============================================================================="
+echo "=========================================================================================================="
 echo " Sysytem Hardening Aduit"
-echo "============================================================================="
+echo "=========================================================================================================="
 echo ""
 echo "Starting checks..."
 
 echo ""
 echo "[1] checking open network ports"
-echo "______________________________________________________________________________"
+echo "-----------------------------------------------------------------------------------------------------------"
 ss -tuln
 
 echo ""
 echo "[1b] Flagging ports exposed to the outside world"
-echo "______________________________________________________________________________"
+echo "-----------------------------------------------------------------------------------------------------------"
 
 RISKY_PORTS=$(ss -tuln | awk '$5 ~ /^0\.0\.0\.0:|^\[::\]:/')
 
@@ -26,7 +26,7 @@ fi
 
 echo""
 echo "[2] Checking SSH configuration"
-echo "______________________________________________________________________________"
+echo "-----------------------------------------------------------------------------------------------------------"
 
 SSHD_CONFIG="/etc/ssh/sshd_config"
 if [ ! -f $SSHD_CONFIG ]; then
@@ -78,3 +78,27 @@ else
     	check_ssh_setting "PasswordAuthentication" "no"
     	check_ssh_setting "PermitEmptyPasswords" "no"
 fi
+
+
+    echo ""
+    echo "[2b] Checking permissions on $SSHD_CONFIG..."
+    echo "------------------------------------"
+
+    FILE_OWNER=$(stat -c "%U" "$SSHD_CONFIG")
+    FILE_PERMS=$(stat -c "%a" "$SSHD_CONFIG")
+
+    echo "Owner: $FILE_OWNER | Permissions: $FILE_PERMS"
+
+    if [ "$FILE_OWNER" != "root" ]; then
+        echo "WARNING: $SSHD_CONFIG is not owned by root (owned by $FILE_OWNER)."
+    else
+        echo "OK: File is owned by root."
+    fi
+
+    GROUP_OTHER_WRITE=$(echo "$FILE_PERMS" | cut -c2-3 | grep -E '[2367]')
+
+    if [ -n "$GROUP_OTHER_WRITE" ]; then
+        echo "WARNING: Group or others have write access to $SSHD_CONFIG (permissions: $FILE_PERMS)."
+    else
+        echo "OK: Group/others do not have write access."
+    fi

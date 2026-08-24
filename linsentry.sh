@@ -25,7 +25,7 @@ else
 fi
 
 echo""
-echo "[2] Checking SSH configuration"
+echo "[2a] Checking SSH configuration"
 echo "-----------------------------------------------------------------------------------------------------------"
 
 SSHD_CONFIG="/etc/ssh/sshd_config"
@@ -77,28 +77,69 @@ else
     	check_ssh_setting "PermitRootLogin" "prohibit-password no"
     	check_ssh_setting "PasswordAuthentication" "no"
     	check_ssh_setting "PermitEmptyPasswords" "no"
+
+
+	echo ""
+	echo "[2b] Checking permissions on $SSHD_CONFIG..."
+	echo "___________________________________________________________________________________________________________"
+
+	FILE_OWNER=$(stat -c "%U" "$SSHD_CONFIG")
+	FILE_PERMS=$(stat -c "%a" "$SSHD_CONFIG")
+
+	echo "Owner: $FILE_OWNER | Permissions: $FILE_PERMS"
+
+	if [ "$FILE_OWNER" != "root" ]; then
+	    echo "WARNING: $SSHD_CONFIG is not owned by root (owned by $FILE_OWNER)."
+	else
+	    echo "OK: File is owned by root."
+	fi
+
+	GROUP_OTHER_WRITE=$(echo "$FILE_PERMS" | cut -c2-3 | grep -E '[2367]')
+
+	if [ -n "$GROUP_OTHER_WRITE" ]; then
+	    echo "WARNING: Group or others have write access to $SSHD_CONFIG (permissions: $FILE_PERMS)."
+	else
+	    echo "OK: Group/others do not have write access."
+	fi
+
 fi
 
+echo ""
+echo "[3] Checking for world-writeble files in your home folder"
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
-    echo ""
-    echo "[2b] Checking permissions on $SSHD_CONFIG..."
-    echo "------------------------------------"
+WORLD_WRITABLE=$(find ~ -type f -perm -o+w 2>/dev/null)
 
-    FILE_OWNER=$(stat -c "%U" "$SSHD_CONFIG")
-    FILE_PERMS=$(stat -c "%a" "$SSHD_CONFIG")
+if [ -z "$WORLD_WRITABLE" ]; then 
+	echo "None found. No world-writable files in $HOME."
+else 
+	echo "WARNING: The following files can be modified by ANY user on this system:"
+	echo "$WROLD_WRITABLE"
+fi
 
-    echo "Owner: $FILE_OWNER | Permissions: $FILE_PERMS"
+echo ""
+echo "[4a] Checking User's accounts ... "
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
-    if [ "$FILE_OWNER" != "root" ]; then
-        echo "WARNING: $SSHD_CONFIG is not owned by root (owned by $FILE_OWNER)."
-    else
-        echo "OK: File is owned by root."
-    fi
+echo "Checking for duplicate UID 0 (root-level) accounts..."
+ROOT_ACCOUNTS=$(awk -F: '$3 == 0 {print $1} ' /etc/passwd)
+ROOT_COUNT=$(echo "ROOT_ACCOUNTS" | wc -l)
 
-    GROUP_OTHER_WRITE=$(echo "$FILE_PERMS" | cut -c2-3 | grep -E '[2367]')
+if [ "$ROOT_COUNT" -gt 1 ]; then
+	echo "WARNING: Multiple UID 0 accounts found:"
+	echo "$ROOT_ACCOUNTS"
+else 
+	echo "OK: Only one UID 0 (root) account found."
+fi
 
-    if [ -n "$GROUP_OTHER_WRITE" ]; then
-        echo "WARNING: Group or others have write access to $SSHD_CONFIG (permissions: $FILE_PERMS)."
-    else
-        echo "OK: Group/others do not have write access."
-    fi
+echo ""
+echo "[4b] Checking for accounts with empty passwords..."
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+EMPTY_PASS=$(sudo awk -F: '($2 == "") {print $1}' /etc/shadow)
+
+if [ -z "$EMPTY_PASS" ]; then
+	echo "OK: No accounts with empty passwords."
+else 
+	echo "WARNING: the following accounts have NO password set:"
+	echo "$EMPTY_PASS"
+fi

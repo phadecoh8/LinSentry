@@ -17,6 +17,8 @@ it finds in plain language, and offers to fix certain issues interactively.
   with interactive prompts to fix unsafe or unset settings
 - **World-writable file scanner** — finds files that any user on the
   system can modify, starting with the home directory
+- **User account audit** — flags duplicate UID 0 (root-level) accounts
+  and accounts with no password set
 
 ## Requirements
 
@@ -38,7 +40,6 @@ any changes — nothing is modified without explicit permission.
 ## Roadmap
 
 - [ ] Permission checks on critical individual files (e.g. `sshd_config`)
-- [ ] User account audit (empty passwords, duplicate root-level accounts)
 - [ ] Sudo privilege audit
 - [ ] Firewall status check
 - [ ] Pending security update check

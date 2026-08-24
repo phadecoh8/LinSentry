@@ -8,12 +8,12 @@ echo "Starting checks..."
 
 echo ""
 echo "[1] checking open network ports"
-echo "-----------------------------------------------------------------------------------------------------------"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 ss -tuln
 
 echo ""
 echo "[1b] Flagging ports exposed to the outside world"
-echo "-----------------------------------------------------------------------------------------------------------"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
 RISKY_PORTS=$(ss -tuln | awk '$5 ~ /^0\.0\.0\.0:|^\[::\]:/')
 
@@ -26,7 +26,7 @@ fi
 
 echo""
 echo "[2a] Checking SSH configuration"
-echo "-----------------------------------------------------------------------------------------------------------"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
 SSHD_CONFIG="/etc/ssh/sshd_config"
 if [ ! -f $SSHD_CONFIG ]; then
@@ -81,7 +81,7 @@ else
 
 	echo ""
 	echo "[2b] Checking permissions on $SSHD_CONFIG..."
-	echo "___________________________________________________________________________________________________________"
+	echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
 	FILE_OWNER=$(stat -c "%U" "$SSHD_CONFIG")
 	FILE_PERMS=$(stat -c "%a" "$SSHD_CONFIG")
@@ -128,6 +128,9 @@ ROOT_COUNT=$(echo "ROOT_ACCOUNTS" | wc -l)
 if [ "$ROOT_COUNT" -gt 1 ]; then
 	echo "WARNING: Multiple UID 0 accounts found:"
 	echo "$ROOT_ACCOUNTS"
+	echo ""
+	echo "Acounts other than 'root' with UID 0 (review these carefully):"
+	echo "$ROOT_ACCOUNTS" | grep -v "^roots$"
 else 
 	echo "OK: Only one UID 0 (root) account found."
 fi
@@ -142,4 +145,12 @@ if [ -z "$EMPTY_PASS" ]; then
 else 
 	echo "WARNING: the following accounts have NO password set:"
 	echo "$EMPTY_PASS"
+		for USERNAME in $EMPTY_PASS; do 
+			read -p "Set a password for '$USERNAME' now? (y/n): " ANSWER
+			if [ "$ANSWER" === "Y" ]; then 
+				sudo pass "$USERNAME"
+			else 
+				echo "Skipped. '$USERNAME' still has no password."
+			fi
+		done
 fi

@@ -18,7 +18,8 @@ it finds in plain language, and offers to fix certain issues interactively.
 - **World-writable file scanner** — finds files that any user on the
   system can modify, starting with the home directory
 - **User account audit** — flags duplicate UID 0 (root-level) accounts
-  and accounts with no password set
+  and lists unfamiliar ones for review; detects accounts with no
+  password set and offers to assign one interactively
 
 ## Requirements
 

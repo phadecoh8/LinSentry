@@ -158,3 +158,30 @@ else
 		done 
 fi 
 echo "=============================================================================================================="
+
+echo ""
+echo "[5] Checking sudo privileges"
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+echo "[5a] Members of the sudo group..."
+SUDO_MEMBERS=$(getent group sudo | cut -d: -f4)
+
+if [ -z "$SUDO_MEMBERS" ]; then
+	echo "No user found in the sudo group."
+else 
+	echo "The following users have sudo privileges"
+	echo "$SUDO_MEMBERS" | tr ',' '\n'
+fi
+
+echo ""
+echo "[5b] Checking for users with NOPASSWD sudo privileges..."
+NOPASSWD_ENTRIES=$(sudo grep -r "NOPASSWD" /etc/sudoers /etc/sudoers.d/ 2>/dev/null)
+
+if [ -z "$NOPASSWD_ENTRIES" ]; then 
+	echo "OK: No NOPASSWD entries found."
+else 
+	echo "WARNING: The following NOPASSWD entries were found (users can run commands without a password):"
+    echo "$NOPASSWD_ENTRIES"
+fi
+
+echo "=============================================================================================================="

@@ -20,6 +20,10 @@ it finds in plain language, and offers to fix certain issues interactively.
 - **User account audit** — flags duplicate UID 0 (root-level) accounts
   and lists unfamiliar ones for review; detects accounts with no
   password set and offers to assign one interactively
+  - **Sudo privilege audit** — lists members of the sudo group and flags
+  any NOPASSWD entries for manual review (detection only — sudo/privilege
+  changes are intentionally left to the administrator's judgment rather
+  than automated)
 
 ## Requirements
 

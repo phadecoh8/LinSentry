@@ -23,6 +23,7 @@ else
         echo "WARNING: The following ports are open to any network device:"
         echo "$RISKY_PORTS"
 fi
+echo "==========================================================================================================="
 
 echo""
 echo "[2a] Checking SSH configuration"
@@ -103,6 +104,7 @@ else
 	fi
 
 fi
+echo "=========================================================================================================="
 
 echo ""
 echo "[3] Checking for world-writeble files in your home folder"
@@ -114,8 +116,9 @@ if [ -z "$WORLD_WRITABLE" ]; then
 	echo "None found. No world-writable files in $HOME."
 else 
 	echo "WARNING: The following files can be modified by ANY user on this system:"
-	echo "$WROLD_WRITABLE"
+	echo "$WORLD_WRITABLE"
 fi
+echo "==========================================================================================================="
 
 echo ""
 echo "[4a] Checking User's accounts ... "
@@ -123,14 +126,14 @@ echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 echo "Checking for duplicate UID 0 (root-level) accounts..."
 ROOT_ACCOUNTS=$(awk -F: '$3 == 0 {print $1} ' /etc/passwd)
-ROOT_COUNT=$(echo "ROOT_ACCOUNTS" | wc -l)
+ROOT_COUNT=$(echo "$ROOT_ACCOUNTS" | wc -l)
 
 if [ "$ROOT_COUNT" -gt 1 ]; then
 	echo "WARNING: Multiple UID 0 accounts found:"
 	echo "$ROOT_ACCOUNTS"
 	echo ""
 	echo "Acounts other than 'root' with UID 0 (review these carefully):"
-	echo "$ROOT_ACCOUNTS" | grep -v "^roots$"
+	echo "$ROOT_ACCOUNTS" | grep -v "^root$"
 else 
 	echo "OK: Only one UID 0 (root) account found."
 fi
@@ -147,10 +150,11 @@ else
 	echo "$EMPTY_PASS"
 		for USERNAME in $EMPTY_PASS; do 
 			read -p "Set a password for '$USERNAME' now? (y/n): " ANSWER
-			if [ "$ANSWER" === "Y" ]; then 
-				sudo pass "$USERNAME"
+			if [ "$ANSWER" == "y" ]; then 
+				sudo passwd "$USERNAME"
 			else 
 				echo "Skipped. '$USERNAME' still has no password."
 			fi
-		done
-fi
+		done 
+fi 
+echo "=============================================================================================================="

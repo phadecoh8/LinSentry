@@ -44,8 +44,6 @@ any changes — nothing is modified without explicit permission.
 
 ## Roadmap
 
-- [ ] Permission checks on critical individual files (e.g. `sshd_config`)
-- [ ] Sudo privilege audit
 - [ ] Firewall status check
 - [ ] Pending security update check
 - [ ] Overall risk score summary

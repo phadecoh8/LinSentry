@@ -30,8 +30,8 @@ it finds in plain language, and offers to fix certain issues interactively.
 ## Usage
 
 ```bash
-chmod +x hardening_audit.sh
-./hardening_audit.sh
+chmod +x linsentry.sh
+./linsentry.sh
 ```
 
 The script will print a report section by section. For any setting it

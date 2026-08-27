@@ -46,6 +46,7 @@ any changes — nothing is modified without explicit permission.
 
 - [ ] Pending security update check
 - [ ] Overall risk score summary
+- [ ] Windows, MacOs and Termux implementation
 
 ## Versioning
 

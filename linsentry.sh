@@ -185,3 +185,95 @@ else
 fi
 
 echo "=============================================================================================================="
+
+
+echo ""
+echo "[6a] Checking firewall status"
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+if ! command -v ufw &> /dev/null; then
+        echo "NOTICE: ufw (firewall) is not installed on this system."
+        read -p "Install ufw now? (y/n): " ANSWER
+        if [ "$ANSWER" == "y" ]; then
+                sudo apt update
+                sudo apt install ufw -y
+                echo "ufw installed. It is not enabled yet — see below."
+        else
+                echo "Skipped. No firewall protection is active on this system."
+        fi
+fi
+
+if command -v ufw &> /dev/null; then
+        UFW_STATUS=$(sudo ufw status | head -n 1)
+
+        if [ "$UFW_STATUS" == "Status: active" ]; then
+                echo "OK: ufw is installed and active."
+                echo ""
+                echo "Current rules:"
+                sudo ufw status verbose
+        else
+                echo "WARNING: ufw is installed but NOT active. No firewall protection is enforced."
+                read -p "Enable ufw now? (y/n): " ANSWER
+                if [ "$ANSWER" == "y" ]; then
+                        sudo ufw enable
+                        echo "ufw enabled."
+                else
+                        echo "Skipped. Firewall remains inactive."
+                fi
+        fi
+fi
+
+if [ -n "$RISKY_PORTS" ]; then
+        echo ""
+        echo "NOTE: Earlier, this script found ports exposed to any network device (see [1b])."
+        echo "A firewall does not automatically protect those ports unless a rule specifically"
+        echo "restricts them. Review your ufw rules above, or run a command like:"
+        echo "  sudo ufw allow from <trusted-IP> to any port 22"
+        echo "to restrict SSH to a specific trusted source, instead of leaving it open to everyone."
+fi
+echo "=============================================================================================================="
+
+
+
+echo ""
+echo "[6b] Closing exposed ports"
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+if [ -z "$RISKY_PORTS" ]; then
+        echo "No exposed ports to close."
+else
+        read -p "Would you like to close any exposed ports? (y/n): " WANTS_TO_CLOSE
+
+        if [ "$WANTS_TO_CLOSE" == "y" ]; then
+                PORT_NUMBERS=$(echo "$RISKY_PORTS" | awk '{print $5}' | awk -F: '{print $NF}' | sort -u)
+
+                echo ""
+                echo "The following ports are exposed to any network device:"
+                echo ""
+                INDEX=1
+                for PORT in $PORT_NUMBERS; do
+                        echo "  [$INDEX] Port $PORT"
+                        INDEX=$((INDEX + 1))
+                done
+
+                echo ""
+                read -p "Enter the port number(s) you want to close (space-separated): " PORTS_TO_CLOSE
+
+                if [ -z "$PORTS_TO_CLOSE" ]; then
+                        echo "No ports entered. Skipped."
+                else
+                        for PORT in $PORTS_TO_CLOSE; do
+                                read -p "Close port $PORT now? (y/n): " CONFIRM
+                                if [ "$CONFIRM" == "y" ]; then
+                                        sudo ufw deny "$PORT"
+                                        echo "Port $PORT has been denied via ufw."
+                                else
+                                        echo "Skipped port $PORT."
+                                fi
+                        done
+                fi
+        else
+                echo "Skipped. No ports were closed."
+        fi
+fi
+echo "================================================================="

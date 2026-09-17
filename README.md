@@ -34,6 +34,20 @@ it finds in plain language, and offers to fix certain issues interactively.
   installed and enforcing; handles a known WSL limitation gracefully
 - **Malware/rootkit scanner presence check** — checks for rkhunter or
   chkrootkit; offers to install rkhunter if neither is present
+- **Password complexity & expiration audit** — checks `PASS_MAX_DAYS`,
+  `PASS_MIN_DAYS`, and `PASS_MIN_LEN` in `/etc/login.defs` against safe
+  values, with interactive prompts to fix unsafe or unset settings
+- **Shared memory protection check** — verifies `/dev/shm` (or
+  `/run/shm`) is mounted with `noexec` and `nosuid`, and offers to add
+  or harden the mount options in `/etc/fstab`
+- **Core dump check** — checks whether core dumps are disabled via
+  `/etc/security/limits.conf` and `kernel.core_pattern`, and offers to
+  disable them
+- **Automatic update check** — checks whether `unattended-upgrades` is
+  installed and enabled, so the system keeps patching itself over time
+  (complements the pending security update check above)
+- **Audit logging check** — checks whether `auditd` and a system logger
+  (journald or rsyslog) are installed and running
 - **Overall risk summary** — tallies warnings across all checks into a
   final result (Excellent / Good / Needs Attention)
 

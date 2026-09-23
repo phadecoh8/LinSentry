@@ -401,7 +401,243 @@ fi
 echo "=========================================================================================================="
 
 echo ""
-echo "[10] Overall Summary"
+echo "[10] Checking password complexity and expiration policy"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+LOGIN_DEFS="/etc/login.defs"
+
+if [ ! -f "$LOGIN_DEFS" ]; then
+        echo "NOTICE: $LOGIN_DEFS not found. Password policy checks skipped."
+else
+        check_login_defs_setting() {
+                SETTING_NAME=$1
+                COMPARISON=$2
+                RECOMMENDED_VALUE=$3
+
+                ACTIVE_LINE=$(grep -E "^${SETTING_NAME}[[:space:]]" "$LOGIN_DEFS")
+
+                if [ -z "$ACTIVE_LINE" ]; then
+                        PASSWORD_POLICY_WARNING="yes"
+                        echo "NOTICE: $SETTING_NAME is not set in $LOGIN_DEFS (using system default)."
+                        read -p "Set $SETTING_NAME to $RECOMMENDED_VALUE now? (y/n): " ANSWER
+                        if [ "$ANSWER" == "y" ]; then
+                                echo "$SETTING_NAME   $RECOMMENDED_VALUE" | sudo tee -a "$LOGIN_DEFS" > /dev/null
+                                echo "Updated. (Applies to newly created accounts only.)"
+                        else
+                                echo "Skipped. No changes made."
+                        fi
+                        return
+                fi
+
+                echo "Current setting found: $ACTIVE_LINE"
+                CURRENT_VALUE=$(echo "$ACTIVE_LINE" | awk '{print $2}')
+
+                IS_SAFE="no"
+                if [ "$COMPARISON" == "le" ]; then
+                        [ "$CURRENT_VALUE" -le "$RECOMMENDED_VALUE" ] 2>/dev/null && IS_SAFE="yes"
+                else
+                        [ "$CURRENT_VALUE" -ge "$RECOMMENDED_VALUE" ] 2>/dev/null && IS_SAFE="yes"
+                fi
+
+                if [ "$IS_SAFE" == "yes" ]; then
+                        echo "OK: $SETTING_NAME = $CURRENT_VALUE (safe)"
+                else
+                        PASSWORD_POLICY_WARNING="yes"
+                        echo "WARNING: $SETTING_NAME = $CURRENT_VALUE (recommended: $RECOMMENDED_VALUE)"
+                        read -p "Change $SETTING_NAME to '$RECOMMENDED_VALUE' now? (y/n): " ANSWER
+                        if [ "$ANSWER" == "y" ]; then
+                                sudo sed -i "s/^${SETTING_NAME}.*/${SETTING_NAME}   ${RECOMMENDED_VALUE}/" "$LOGIN_DEFS"
+                                echo "Updated. (Applies to newly created accounts only — use 'chage' to update existing users.)"
+                        else
+                                echo "Skipped. No changes made."
+                        fi
+                fi
+        }
+
+        check_login_defs_setting "PASS_MAX_DAYS" "le" 90
+        check_login_defs_setting "PASS_MIN_DAYS" "ge" 1
+        check_login_defs_setting "PASS_MIN_LEN" "ge" 8
+fi
+echo "=========================================================================================================="
+
+echo ""
+echo "[11] Checking shared memory protection"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+FSTAB="/etc/fstab"
+SHM_LINE=$(grep -E '[[:space:]](/run/shm|/dev/shm)[[:space:]]' "$FSTAB" 2>/dev/null)
+
+if [ -z "$SHM_LINE" ]; then
+        SHM_WARNING="yes"
+        echo "NOTICE: No explicit /dev/shm entry found in $FSTAB (using kernel default mount)."
+        read -p "Add a hardened /dev/shm entry (noexec,nosuid,nodev) to $FSTAB now? (y/n): " ANSWER
+        if [ "$ANSWER" == "y" ]; then
+                echo "tmpfs /dev/shm tmpfs defaults,noexec,nosuid,nodev 0 0" | sudo tee -a "$FSTAB" > /dev/null
+                echo "Added. (Run: sudo mount -o remount /dev/shm  to apply it, or reboot.)"
+        else
+                echo "Skipped. No changes made."
+        fi
+else
+        echo "Current entry found: $SHM_LINE"
+        MISSING_OPTS=""
+        echo "$SHM_LINE" | grep -q "noexec" || MISSING_OPTS="${MISSING_OPTS}noexec,"
+        echo "$SHM_LINE" | grep -q "nosuid" || MISSING_OPTS="${MISSING_OPTS}nosuid,"
+
+        if [ -z "$MISSING_OPTS" ]; then
+                echo "OK: Shared memory is mounted with noexec and nosuid."
+        else
+                SHM_WARNING="yes"
+                echo "WARNING: Shared memory is missing protective option(s): ${MISSING_OPTS%,}"
+                read -p "Add ${MISSING_OPTS%,} to the /dev/shm mount options now? (y/n): " ANSWER
+                if [ "$ANSWER" == "y" ]; then
+                        CURRENT_OPTS=$(echo "$SHM_LINE" | awk '{print $4}')
+                        NEW_OPTS="${CURRENT_OPTS},${MISSING_OPTS%,}"
+                        sudo sed -i "s|${CURRENT_OPTS}|${NEW_OPTS}|" "$FSTAB"
+                        SHM_MOUNT_POINT=$(echo "$SHM_LINE" | awk '{print $2}')
+                        echo "Updated. (Run: sudo mount -o remount $SHM_MOUNT_POINT  to apply it.)"
+                else
+                        echo "Skipped. No changes made."
+                fi
+        fi
+fi
+echo "=========================================================================================================="
+
+echo ""
+echo "[12] Checking system core dump settings"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+LIMITS_CONF="/etc/security/limits.conf"
+CORE_LIMIT_LINE=$(grep -E '^\*[[:space:]]+hard[[:space:]]+core[[:space:]]+0' "$LIMITS_CONF" 2>/dev/null)
+
+if [ -n "$CORE_LIMIT_LINE" ]; then
+        echo "OK: Core dumps are disabled via $LIMITS_CONF ($CORE_LIMIT_LINE)."
+else
+        CORE_DUMP_WARNING="yes"
+        echo "WARNING: No '* hard core 0' entry found in $LIMITS_CONF. Core dumps are not disabled."
+        read -p "Add '* hard core 0' to $LIMITS_CONF now? (y/n): " ANSWER
+        if [ "$ANSWER" == "y" ]; then
+                echo "*               hard    core            0" | sudo tee -a "$LIMITS_CONF" > /dev/null
+                echo "Added. (Takes effect for new login sessions.)"
+        else
+                echo "Skipped. No changes made."
+        fi
+fi
+
+echo ""
+CORE_PATTERN=$(sysctl -n kernel.core_pattern 2>/dev/null)
+echo "Current kernel.core_pattern: $CORE_PATTERN"
+
+if [ "$CORE_PATTERN" == "|/bin/false" ] || [ "$CORE_PATTERN" == "/dev/null" ]; then
+        echo "OK: kernel.core_pattern is configured to discard core dumps."
+else
+        CORE_DUMP_WARNING="yes"
+        echo "WARNING: kernel.core_pattern is not configured to discard core dumps."
+        read -p "Set kernel.core_pattern to discard core dumps now? (y/n): " ANSWER
+        if [ "$ANSWER" == "y" ]; then
+                sudo sysctl -w kernel.core_pattern="|/bin/false" > /dev/null
+                echo "kernel.core_pattern=|/bin/false" | sudo tee -a /etc/sysctl.conf > /dev/null
+                echo "Updated and persisted in /etc/sysctl.conf."
+        else
+                echo "Skipped. No changes made."
+        fi
+fi
+echo "=========================================================================================================="
+
+echo ""
+echo "[13] Checking automatic update configuration"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+if dpkg -l unattended-upgrades 2>/dev/null | grep -q "^ii"; then
+        echo "OK: unattended-upgrades is installed."
+
+        AUTO_UPGRADES_CONF="/etc/apt/apt.conf.d/20auto-upgrades"
+        if [ -f "$AUTO_UPGRADES_CONF" ] && grep -q 'APT::Periodic::Unattended-Upgrade "1"' "$AUTO_UPGRADES_CONF"; then
+                echo "OK: Automatic (unattended) upgrades are enabled."
+        else
+                AUTO_UPDATE_WARNING="yes"
+                echo "WARNING: unattended-upgrades is installed but not enabled."
+                read -p "Enable automatic security updates now? (y/n): " ANSWER
+                if [ "$ANSWER" == "y" ]; then
+                        sudo dpkg-reconfigure -plow unattended-upgrades
+                        echo "Reconfigured. Check $AUTO_UPGRADES_CONF to confirm."
+                else
+                        echo "Skipped. Automatic updates remain disabled."
+                fi
+        fi
+else
+        AUTO_UPDATE_WARNING="yes"
+        echo "NOTICE: unattended-upgrades is not installed. This system will not automatically"
+        echo "install future security patches (see [7] for updates currently pending)."
+        read -p "Install and enable unattended-upgrades now? (y/n): " ANSWER
+        if [ "$ANSWER" == "y" ]; then
+                sudo apt update
+                sudo apt install unattended-upgrades -y
+                if [ $? -eq 0 ]; then
+                        sudo dpkg-reconfigure -plow unattended-upgrades
+                        echo "unattended-upgrades installed and configured."
+                else
+                        echo "WARNING: Installation did not complete successfully."
+                fi
+        else
+                echo "Skipped. No automatic update mechanism installed."
+        fi
+fi
+echo "=========================================================================================================="
+
+echo ""
+echo "[14] Checking audit logging"
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+if command -v auditctl &> /dev/null; then
+        if systemctl is-active --quiet auditd; then
+                echo "OK: auditd is installed and running."
+        else
+                AUDIT_WARNING="yes"
+                echo "WARNING: auditd is installed but not running."
+                read -p "Start and enable auditd now? (y/n): " ANSWER
+                if [ "$ANSWER" == "y" ]; then
+                        sudo systemctl enable --now auditd
+                        if [ $? -eq 0 ]; then
+                                echo "auditd enabled and started."
+                        else
+                                echo "WARNING: Failed to enable/start auditd."
+                        fi
+                else
+                        echo "Skipped. auditd remains inactive."
+                fi
+        fi
+else
+        AUDIT_WARNING="yes"
+        echo "NOTICE: auditd is not installed. Security-relevant events (file access,"
+        echo "privilege changes, auth attempts) are not being audited."
+        read -p "Install and enable auditd now? (y/n): " ANSWER
+        if [ "$ANSWER" == "y" ]; then
+                sudo apt update
+                sudo apt install auditd audispd-plugins -y
+                if [ $? -eq 0 ]; then
+                        sudo systemctl enable --now auditd
+                        echo "auditd installed, enabled, and started."
+                else
+                        echo "WARNING: auditd installation did not complete successfully."
+                fi
+        else
+                echo "Skipped. No audit logging installed."
+        fi
+fi
+
+echo ""
+if systemctl is-active --quiet systemd-journald || systemctl is-active --quiet rsyslog; then
+        echo "OK: A system logger (journald or rsyslog) is active."
+else
+        AUDIT_WARNING="yes"
+        echo "WARNING: Neither systemd-journald nor rsyslog appears to be active."
+        echo "System logs may not be captured. Manual investigation recommended —"
+        echo "this typically indicates a non-standard init setup and is not auto-fixed."
+fi
+echo "=========================================================================================================="
+
+echo ""
+echo "[15] Overall Summary"
 echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
 WARNING_COUNT=0
@@ -413,6 +649,11 @@ WARNING_COUNT=0
 [ -n "$EMPTY_PASS" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
 [ -n "$NOPASSWD_ENTRIES" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
 [ -n "$SECURITY_UPDATES" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
+[ -n "$PASSWORD_POLICY_WARNING" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
+[ -n "$SHM_WARNING" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
+[ -n "$CORE_DUMP_WARNING" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
+[ -n "$AUTO_UPDATE_WARNING" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
+[ -n "$AUDIT_WARNING" ] && WARNING_COUNT=$((WARNING_COUNT + 1))
 
 echo "LinSentry Audit Complete."
 echo ""
